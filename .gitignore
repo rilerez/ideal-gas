@@ -1,0 +1,7 @@
+*.s
+assets
+build/
+embuild/
+*.out
+\#*
+.#*

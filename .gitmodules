@@ -1,0 +1,6 @@
+[submodule "sdl2-cmake-modules"]
+	path = sdl2-cmake-modules
+	url = https://gitlab.com/aminosbh/sdl2-cmake-modules.git
+[submodule "sdl2raii"]
+	path = sdl2raii
+	url = git@github.com:rilerez/sdl2raii.git
