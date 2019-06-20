@@ -18,8 +18,8 @@ std::vector<vec> velocity;
 fptype radius = 5;
 constexpr fptype damp = 1;
 
-int world_width = 300;
-int world_length = world_width;
+int world_width = 500;
+int world_height = world_width;
 
 template<class F>
 struct finally {
@@ -35,7 +35,7 @@ inline auto clamp(fptype low, fptype high, fptype x) {
 }
 #define FN(...) [&](auto _) { return __VA_ARGS__; }
 vec in_bounds(vec x) {
-  auto clamper = FN(clamp(radius, world_length - radius, _));
+  auto clamper = FN(clamp(radius, world_height - radius, _));
   return {clamper(x.real()), clamper(x.imag())};
 }
 
@@ -55,7 +55,7 @@ void collide_update(int i1, int i2) {
   auto const p2 = position[i2];
 
   // prevent division by 0
-  constexpr fptype smooth= .001;
+  constexpr fptype smooth= .0001;
 
   constexpr auto collide_vel =
       [smooth](vec const v1, vec const v2, vec const p1, vec const p2) -> vec {
@@ -80,7 +80,7 @@ void update() {
        || position[i].real() >= world_width - radius)
       velocity[i] = vec{-velocity[i].real(), velocity[i].imag()} * damp;
     if(position[i].imag() <= radius
-       || position[i].imag() >= world_width - radius)
+       || position[i].imag() >= world_height - radius)
       velocity[i] = vec{velocity[i].real(), -velocity[i].imag()} * damp;
     position[i] = in_bounds(position[i]);
   }
@@ -118,7 +118,7 @@ int main() {
   finally _ = [] { sdl::Quit(); };
 
   std::random_device rd;
-  auto gen = std::mt19937(rd());
+  auto gen = std::make_unique<std::mt19937>(rd());
   auto rand_pos = std::uniform_real_distribution<fptype>{
       static_cast<fptype>(radius),
       static_cast<fptype>(world_width - radius)};
@@ -126,23 +126,23 @@ int main() {
   constexpr auto max_speed = .1;
   auto rand_vel = std::uniform_real_distribution<fptype>(-max_speed, max_speed);
 
-  constexpr int num_things = 500;
+  constexpr int num_things = 600;
   position.resize(num_things);
   velocity.resize(num_things);
 
   for(int i = 0; i < num_things; ++i) {
-    position[i] = {rand_pos(gen), rand_pos(gen)};
+    position[i] = {rand_pos(*gen), rand_pos(*gen)};
   }
   for(int i = 0; i < num_things; ++i) {
-    velocity[i] = {rand_vel(gen), rand_vel(gen)};
+    velocity[i] = {rand_vel(*gen), rand_vel(*gen)};
   }
 
   auto window = sdl::CreateWindow("ideal gas",
                                   sdl::window::pos_undefined,
                                   sdl::window::pos_undefined,
                                   world_width,
-                                  world_length,
-                                  0);
+                                  world_height,
+                                  sdl::window::resizable);
   auto renderer = sdl::CreateRenderer(
       window.get(),
       -1,
