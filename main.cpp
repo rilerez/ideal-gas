@@ -8,6 +8,13 @@
 #include "sdl2raii/emscripten_glue.hpp"
 #include "sdl2raii/sdl.hpp"
 
+template<class F>
+struct finally {
+  F f;
+  finally(F f) : f{f} {}
+  ~finally() { f(); }
+};
+
 using namespace std::literals;
 
 using fptype = double;
@@ -18,17 +25,10 @@ std::vector<vec> velocity;
 fptype radius = 5;
 constexpr fptype damp = 1;
 
-int world_width = 500;
+int world_width = 300;
 int world_height = world_width;
 
-template<class F>
-struct finally {
-  F f;
-  finally(F f) : f{f} {}
-  ~finally() { f(); }
-};
-
-auto constexpr update_step = 16ms;
+auto constexpr update_step = 20ms;
 
 inline auto clamp(fptype low, fptype high, fptype x) {
   return std::max(low, std::min(high, x));
@@ -41,7 +41,7 @@ vec in_bounds(vec x) {
 
 auto dot(vec x, vec y) { return (x * conj(y)).real(); }
 
-const fptype col_rad = 3 * radius;
+const fptype col_rad = 5 * radius;
 bool is_collide(int i1, int i2) {
   return norm(position[i1] - position[i2]) <= col_rad;
 }
@@ -53,38 +53,39 @@ void collide_update(int i1, int i2) {
   auto const v2 = velocity[i2];
   auto const p1 = position[i1];
   auto const p2 = position[i2];
-
   // prevent division by 0
-  constexpr fptype smooth= .0001;
-
+  constexpr fptype smooth = .0001;
   constexpr auto collide_vel =
       [smooth](vec const v1, vec const v2, vec const p1, vec const p2) -> vec {
     auto d = (p1 - p2);
     auto u = d / (norm(d) + smooth);
     return v1 - (dot(v1 - v2, u) * d);
   };
-
   constexpr auto collide_pos = [smooth](vec const p1, vec const p2) -> vec {
-    return p1 - ((p1 - p2) / (norm(p1 - p2) + smooth)) * col_rad;
+    auto d = (p1 - p2);
+    auto u = d / (norm(d) + smooth);
+    return p1 + u * col_rad * .7;
   };
   velocity[i1] = collide_vel(v1, v2, p1, p2);
-  velocity[i2] = collide_vel(v2, v1, p1, p2);
-  position[i1] = collide_pos(p1, p2);
-  position[i2] = collide_pos(p2, p1);
+  velocity[i2] = collide_vel(v2, v1, p2, p1);
+  position[i1] = collide_pos(p1, p2) + smooth*5;
+  position[i2] = collide_pos(p2, p1) - smooth*5;
+}
+
+void keep_in_bounds(int i) {
+  if(position[i].real() <= radius || position[i].real() >= world_width - radius)
+    velocity[i] = vec{-velocity[i].real(), velocity[i].imag()} * damp;
+  if(position[i].imag() <= radius
+     || position[i].imag() >= world_height - radius)
+    velocity[i] = vec{velocity[i].real(), -velocity[i].imag()} * damp;
+  position[i] = in_bounds(position[i]);
 }
 
 void update() {
   for(int i = 0; i < position.size(); ++i) {
     position[i] += velocity[i] * static_cast<fptype>(update_step.count());
-    if(position[i].real() <= radius
-       || position[i].real() >= world_width - radius)
-      velocity[i] = vec{-velocity[i].real(), velocity[i].imag()} * damp;
-    if(position[i].imag() <= radius
-       || position[i].imag() >= world_height - radius)
-      velocity[i] = vec{velocity[i].real(), -velocity[i].imag()} * damp;
-    position[i] = in_bounds(position[i]);
+    keep_in_bounds(i);
   }
-
   for(int i = 0; i < position.size(); ++i)
     for(int j = 0; j < position.size(); ++j) {
       if(i == j)
@@ -102,7 +103,6 @@ void render(sdl::Renderer* renderer, std::chrono::milliseconds lag) {
                      static_cast<int>(2 * radius),
                      static_cast<int>(2 * radius)};
   };
-
   sdl::SetRenderDrawColor(renderer, {50, 50, 50, 255});
   sdl::RenderClear(renderer);
   sdl::SetRenderDrawColor(renderer, {200, 200, 200, 255});
@@ -123,19 +123,17 @@ int main() {
       static_cast<fptype>(radius),
       static_cast<fptype>(world_width - radius)};
 
-  constexpr auto max_speed = .1;
+  constexpr auto max_speed = .03;
   auto rand_vel = std::uniform_real_distribution<fptype>(-max_speed, max_speed);
 
-  constexpr int num_things = 600;
+  constexpr int num_things = 400;
   position.resize(num_things);
   velocity.resize(num_things);
 
-  for(int i = 0; i < num_things; ++i) {
+  for(int i = 0; i < num_things; ++i)
     position[i] = {rand_pos(*gen), rand_pos(*gen)};
-  }
-  for(int i = 0; i < num_things; ++i) {
+  for(int i = 0; i < num_things; ++i)
     velocity[i] = {rand_vel(*gen), rand_vel(*gen)};
-  }
 
   auto window = sdl::CreateWindow("ideal gas",
                                   sdl::window::pos_undefined,

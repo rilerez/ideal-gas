@@ -1,0 +1,3 @@
+/home/riley/projects/idealgas/embuild/CMakeFiles/rebuild_cache.dir
+/home/riley/projects/idealgas/embuild/CMakeFiles/main.dir
+/home/riley/projects/idealgas/embuild/CMakeFiles/edit_cache.dir
