@@ -194,7 +194,7 @@ Module['FS_createPath']('/', 'assets', true, true);
   }
 
  }
- loadPackage({"files": [{"filename": "/assets/circle.bmp", "start": 0, "end": 4234, "audio": 0}], "remote_package_size": 4234, "package_uuid": "15533fbb-4ea2-4b47-9781-8d604dbf92c1"});
+ loadPackage({"files": [{"filename": "/assets/circle.bmp", "start": 0, "end": 4234, "audio": 0}], "remote_package_size": 4234, "package_uuid": "cc95d1df-8e15-4a3e-835d-aea66cde5322"});
 
 })();
 
