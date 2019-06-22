@@ -1,1 +1,0 @@
-/home/riley/emsdk/fastcomp/emscripten/em++    -s USE_SDL=2 -s -fno-rtti --preload-file ../assets @CMakeFiles/main.dir/objects1.rsp  -o main.html 
