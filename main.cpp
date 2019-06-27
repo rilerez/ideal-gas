@@ -8,22 +8,28 @@
 #include "sdl2raii/emscripten_glue.hpp"
 #include "sdl2raii/sdl.hpp"
 
-template<class F>
+template<class Thunk>
 struct finally {
-  F f;
-  finally(F f) : f{f} {}
-  ~finally() { f(); }
+  Thunk thunk;
+  finally(Thunk thunk) : thunk{std::move(thunk)} {}
+  ~finally() { thunk(); }
 };
 
 using namespace std::literals;
+namespace chrono = std::chrono;
 
 using fptype = double;
 using vec = std::complex<fptype>;
+
+auto dot(vec const z, vec const w) { return z * conj(w); }
+auto wedge(vec const z, vec const w) {
+  return z.real() * w.imag() - z.imag() * w.real();
+}
+
 std::vector<vec> position;
 std::vector<vec> velocity;
 
 fptype radius = 5;
-constexpr fptype damp = 1;
 
 int world_width = 300;
 int world_height = world_width;
@@ -39,14 +45,10 @@ vec in_bounds(vec x) {
   return {clamper(x.real()), clamper(x.imag())};
 }
 
-auto dot(vec x, vec y) { return (x * conj(y)).real(); }
-
 const fptype col_rad = 5 * radius;
 bool is_collide(int i1, int i2) {
   return norm(position[i1] - position[i2]) <= col_rad;
 }
-
-constexpr auto square = [](auto x) { return x * x; };
 
 void collide_update(int i1, int i2) {
   auto const v1 = velocity[i1];
@@ -55,29 +57,23 @@ void collide_update(int i1, int i2) {
   auto const p2 = position[i2];
   // prevent division by 0
   constexpr fptype smooth = .0001;
-  constexpr auto collide_vel =
-      [smooth](vec const v1, vec const v2, vec const p1, vec const p2) -> vec {
-    auto d = (p1 - p2);
-    auto u = d / (norm(d) + smooth);
-    return v1 - (dot(v1 - v2, u) * d);
-  };
-  constexpr auto collide_pos = [smooth](vec const p1, vec const p2) -> vec {
-    auto d = (p1 - p2);
-    auto u = d / (norm(d) + smooth);
-    return p1 + u * col_rad * .7;
-  };
-  velocity[i1] = collide_vel(v1, v2, p1, p2);
-  velocity[i2] = collide_vel(v2, v1, p2, p1);
-  position[i1] = collide_pos(p1, p2) + smooth*5;
-  position[i2] = collide_pos(p2, p1) - smooth*5;
+  constexpr fptype offset = .0005;
+  constexpr auto collide1 =
+      [=](vec const v1, vec const v2, vec const p1, vec const p2) {
+        auto const d = (p1 - p2);
+        auto const u = (d + offset) / (norm(d) + smooth);
+        return make_tuple(v1 - (dot(v1 - v2, u) * d), p1 + u * col_rad * .7);
+      };
+  std::tie(velocity[i1], position[i1]) = collide1(v1, v2, p1, p2);
+  std::tie(velocity[i2], position[i2]) = collide1(v2, v1, p2, p1);
 }
 
 void keep_in_bounds(int i) {
   if(position[i].real() <= radius || position[i].real() >= world_width - radius)
-    velocity[i] = vec{-velocity[i].real(), velocity[i].imag()} * damp;
+    velocity[i] = vec{-velocity[i].real(), velocity[i].imag()};
   if(position[i].imag() <= radius
      || position[i].imag() >= world_height - radius)
-    velocity[i] = vec{velocity[i].real(), -velocity[i].imag()} * damp;
+    velocity[i] = vec{velocity[i].real(), -velocity[i].imag()};
   position[i] = in_bounds(position[i]);
 }
 
@@ -87,16 +83,13 @@ void update() {
     keep_in_bounds(i);
   }
   for(int i = 0; i < position.size(); ++i)
-    for(int j = 0; j < position.size(); ++j) {
-      if(i == j)
-        continue;
+    for(int j = 0; j < i; ++j)
       if(is_collide(i, j))
         collide_update(i, j);
-    }
 }
 
 sdl::unique::Texture tex;
-void render(sdl::Renderer* renderer, std::chrono::milliseconds lag) {
+void render(sdl::Renderer* renderer, chrono::milliseconds lag) {
   auto particle_at = [](auto pos) {
     return sdl::Rect{static_cast<int>(pos.real() - radius),
                      static_cast<int>(pos.imag() - radius),
@@ -149,11 +142,11 @@ int main() {
   tex = sdl::CreateTextureFromSurface(renderer.get(),
                                       sdl::LoadBMP("assets/circle.bmp"));
 
-  auto last_time = std::chrono::high_resolution_clock::now();
+  auto last_time = chrono::high_resolution_clock::now();
   auto lag = last_time - last_time;
 
   emscripten_glue::main_loop([&] {
-    auto this_time = std::chrono::high_resolution_clock::now();
+    auto this_time = chrono::high_resolution_clock::now();
     auto elapsed_time = this_time - last_time;
     lag += elapsed_time;
 
@@ -168,8 +161,7 @@ int main() {
       }
     }
 
-    render(renderer.get(),
-           std::chrono::duration_cast<std::chrono::milliseconds>(lag));
+    render(renderer.get(), chrono::duration_cast<chrono::milliseconds>(lag));
 
     last_time = this_time;
   });
